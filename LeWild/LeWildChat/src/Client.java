@@ -1,40 +1,21 @@
-/**
- * Created by mariuspenteliuc on 10.5.16.
- */
+import sun.audio.AudioPlayer;
+import sun.audio.AudioStream;
 
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
 import java.io.*;
 import java.net.Socket;
-import java.util.Scanner;
 
-/*
- * The Client that can be run both as a console or a GUI
- */
 public class Client {
 
-    // for I/O
-    private ObjectInputStream sInput;        // to read from the socket
-    private ObjectOutputStream sOutput;        // to write on the socket
+    private ObjectInputStream sInput;       // to read from the socket
+    private ObjectOutputStream sOutput;     // to write on the socket
     private Socket socket;
 
-    // if I use a GUI or not
-//    private ClientGUI cg;
-
-    // the server, the port and the username
     private String server, username;
     private int port;
 
-    /*
-     *  Constructor called by console mode
-     *  server: the server address
-     *  port: the port number
-     *  username: the username
-     */
-
-
-    /*
-     * Constructor call when used from a GUI
-     * in console mode the ClienGUI parameter is null
-     */
     Client(String server, int port, String username) {
         this.server = server;
         this.port = port;
@@ -42,64 +23,43 @@ public class Client {
         // save if we are in GUI mode or not
     }
 
-    /*
-     * To start the Client in console mode use one of the following command
-     * > java Client
-     * > java Client username
-     * > java Client username portNumber
-     * > java Client username portNumber serverAddress
-     * at the console prompt
-     * If the portNumber is not specified 1500 is used
-     * If the serverAddress is not specified "localHost" is used
-     * If the username is not specified "Anonymous" is used
-     * > java Client
-     * is equivalent to
-     * > java Client Anonymous 1500 localhost
-     * are eqquivalent
-     *
-     * In console mode, if an error occurs the program simply stops
-     * when a GUI id used, the GUI is informed of the disconnection
-     */
     public static void main(String[] args) throws IOException {
         // default values
-        int portNumber;// = 22003;//1500;
-        String serverAddress;// = "79.114.106.252";
-        String userName;// = "MacBook";
-
-        BufferedReader bufferRead = new BufferedReader(new InputStreamReader(System.in));
-        System.out.println("Choose server IP address: ");
-        serverAddress = bufferRead.readLine();
-        System.out.println("Choose port number: ");
-        portNumber = Integer.parseInt(bufferRead.readLine());
-        System.out.println("Choose user name: ");
-        userName = bufferRead.readLine();
+        int portNumber = 1500;// = 22003;
+        String serverAddress = "localhost";// = "79.114.106.252";
+        String userName = "";// = "MacBook";
 
         // depending of the number of arguments provided we fall through
         switch (args.length) {
-            // > javac Client username portNumber serverAddr
             case 3:
-                serverAddress = args[2];
                 // > javac Client username portNumber
+                serverAddress = args[2];
             case 2:
                 try {
                     portNumber = Integer.parseInt(args[1]);
+                    break;
                 } catch (Exception e) {
                     System.out.println("Invalid port number.");
                     System.out.println("Usage is: > java Client [username] [portNumber] [serverAddress]");
-                    return;
                 }
-                // > javac Client username
             case 1:
                 userName = args[0];
-                // > java Client
-            case 0:
                 break;
+            case 0: {
+                BufferedReader bufferRead = new BufferedReader(new InputStreamReader(System.in));
+                System.out.println("Choose server IP address: ");
+                serverAddress = bufferRead.readLine();
+                System.out.println("Choose port number: ");
+                portNumber = Integer.parseInt(bufferRead.readLine());
+                System.out.println("Choose user name: ");
+                userName = bufferRead.readLine();
+                break;
+            }
             // invalid number of arguments
             default:
-                System.out.println("Usage is: > java Client [username] [portNumber] {serverAddress]");
+                System.out.println("Usage is: > java Client [username] [portNumber] [serverAddress]");
                 return;
         }
-        // create the Client object
         Client client = new Client(serverAddress, portNumber, userName);
         // test if we can start the connection to the Server
         // if it failed nothing we can do
@@ -107,40 +67,60 @@ public class Client {
             return;
 
         // wait for messages from user
-        Scanner scan = new Scanner(System.in);
+        BufferedReader bufferRead = new BufferedReader(new InputStreamReader(System.in));
         // loop forever for message from the user
         while (true) {
             System.out.print("> ");
-            // read message from user
-            String msg = scan.nextLine();
-            // logout if message is LOGOUT
+            String msg = bufferRead.readLine();//;scan.nextLine();
             if (msg.equalsIgnoreCase("LOGOUT")) {
                 client.sendMessage(new ChatMessage(ChatMessage.LOGOUT, ""));
-                // break to do the disconnect
                 break;
-            }
-            // message WhoIsIn
-            else if (msg.equalsIgnoreCase("WHOISIN")) {
+            } else if (msg.equalsIgnoreCase("WHOISIN")) {
                 client.sendMessage(new ChatMessage(ChatMessage.WHOISIN, ""));
-            } else {                // default to ordinary message
+            } else {
+                // default to ordinary message
                 client.sendMessage(new ChatMessage(ChatMessage.MESSAGE, msg));
             }
         }
-        // done disconnect
         client.disconnect();
     }
 
-    /*
-     * To start the dialog
-     */
+    public static synchronized void playTheSound() {//final String url) {
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    InputStream inputStream = getClass().getResourceAsStream("gong.au");
+                    AudioStream audioStream = new AudioStream(inputStream);
+                    AudioPlayer.player.start(audioStream);
+                } catch (Exception e) {
+                    System.err.println(e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    public static synchronized void playOtherSound() {
+        try {
+            File f = new File(System.getProperty("user.dir") + "/src/audio.wav");
+            AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(f);
+            Clip clip = AudioSystem.getClip();
+            clip.open(audioInputStream);
+            clip.start();
+            Thread.sleep(100);
+            clip.drain();
+            clip.close();
+            audioInputStream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     public boolean start() {
-        // try to connect to the server
         try {
             socket = new Socket(server, port);
-        }
-        // if it failed not much I can so
-        catch (Exception ec) {
-            display("Error connectiong to server:" + ec);
+        } catch (Exception ec) {
+            display("Error connecting to server:" + ec);
             return false;
         }
 
@@ -171,15 +151,8 @@ public class Client {
         return true;
     }
 
-    /*
-     * To send a message to the console or the GUI
-     */
     private void display(String msg) {
-//        if (cg == null)
-        System.out.println(msg); // println in console mode
-
-//        else
-//            cg.append(msg + "\n");        // append to the ClientGUI JTextArea (or whatever)
+        System.out.println(msg);
     }
 
     /*
@@ -188,65 +161,38 @@ public class Client {
     void sendMessage(ChatMessage msg) {
         try {
             sOutput.writeObject(msg);
-
-
         } catch (IOException e) {
             display("Exception writing to server: " + e);
         }
-
-
     }
 
-    /*
+    /**
      * When something goes wrong
-     * Close the Input/Output streams and disconnect not much to do in the catch clause
+     * Close the Input/Output streams and disconnect
+     * not much to do in the catch clause
      */
     private void disconnect() {
         try {
             if (sInput != null) sInput.close();
-        } catch (Exception e) {
-        } // not much else I can do
-        try {
             if (sOutput != null) sOutput.close();
-        } catch (Exception e) {
-        } // not much else I can do
-        try {
             if (socket != null) socket.close();
-        } catch (Exception e) {
-        } // not much else I can do
-
-        // inform the GUI
-//        if (cg != null)
-//            cg.connectionFailed();
-
+        } catch (Exception ignored) {
+            // not much else I can do
+        }
     }
 
-    /*
-     * a class that waits for the message from the server and append them to the JTextArea
-     * if we have a GUI or simply System.out.println() it in console mode
-     */
     class ListenFromServer extends Thread {
-
         public void run() {
             while (true) {
                 try {
                     String msg = (String) sInput.readObject();
-
-                    // if console mode print the message and add back the prompt
-//                    if (cg == null) {
+                    playOtherSound();
                     System.out.println(msg);
                     System.out.print("> ");
-//                    } else {
-//                        cg.append(msg);
-//                    }
                 } catch (IOException e) {
                     display("Server has close the connection: " + e);
-//                    if (cg != null)
-//                        cg.connectionFailed();
                     break;
-                }
-                // can't happen with a String object but need the catch anyhow
-                catch (ClassNotFoundException e2) {
+                } catch (ClassNotFoundException ignored) {
                 }
             }
         }
